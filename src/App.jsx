@@ -27,7 +27,6 @@ function SpaceShip({ speed }) {
 
 function BlackHole() {
   const { scene } = useGLTF('/black_hole.glb')
-  // Responsive Scale for BlackHole
   const scale = window.innerWidth < 768 ? 1.5 : 2.5
   return <Float speed={1}><primitive object={scene} scale={scale} position={[0, -1, -8]} /></Float>
 }
@@ -67,31 +66,20 @@ function ProjectSceneModel() {
   )
 }
 
-// FIXED: Scene 6 Model (Fully Responsive Scale)
 function ContactModel() {
   const { scene } = useGLTF('/scence6.glb') 
   const ref = useRef()
-  
-  // Detect mobile
   const isMobile = window.innerWidth < 768
   const dynamicScale = isMobile ? 2 : 3
-  const dynamicPosition = isMobile ? [0, 0, 0] : [0, 0, 0]
-
   useFrame((state) => {
     if (ref.current) {
       ref.current.position.y = Math.sin(state.clock.elapsedTime) * 0.15
     }
   })
-
   return (
     <group>
       <pointLight position={[5, 5, 5]} intensity={5} color="cyan" />
-      <primitive 
-        ref={ref} 
-        object={scene} 
-        scale={dynamicScale} 
-        position={dynamicPosition} 
-      />
+      <primitive ref={ref} object={scene} scale={dynamicScale} position={[0, 0, 0]} />
     </group>
   )
 }
@@ -132,6 +120,7 @@ export default function App() {
   const [currentScene, setCurrentScene] = useState('travel')
   const [isJumping, setIsJumping] = useState(false)
   const [flash, setFlash] = useState(false)
+  const [isHolding, setIsHolding] = useState(false)
   const timerRef = useRef(null)
 
   const handleJump = (nextScene) => {
@@ -147,10 +136,22 @@ export default function App() {
     }, 1000)
   }
 
-  const startWarp = () => {
-    setSpeed(8)
-    timerRef.current = setTimeout(() => handleJump('blackhole'), 5000)
-  }
+  // Joystick Logic
+  const startWarp = (e) => {
+    if (e.cancelable) e.preventDefault();
+    setIsHolding(true);
+    setSpeed(8);
+    timerRef.current = setTimeout(() => {
+      handleJump('blackhole');
+      setIsHolding(false);
+    }, 4000);
+  };
+
+  const stopWarp = () => {
+    clearTimeout(timerRef.current);
+    setIsHolding(false);
+    setSpeed(1);
+  };
 
   return (
     <div style={{ 
@@ -160,6 +161,7 @@ export default function App() {
       
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 10px cyan; } 50% { box-shadow: 0 0 30px cyan; } 100% { box-shadow: 0 0 10px cyan; } }
         .stat-card { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(0,255,255,0.2); backdrop-filter: blur(10px); flex: 1; text-align: center; }
         .timeline-container { position: relative; max-width: 800px; margin: 40px auto; padding-left: 30px; border-left: 2px solid cyan; text-align: left; }
         .timeline-item { position: relative; margin-bottom: 40px; animation: fadeIn 1s ease-out forwards; }
@@ -171,27 +173,19 @@ export default function App() {
         .project-card:hover { border-color: cyan; transform: translateY(-5px); background: rgba(0,255,255,0.05); }
         .proj-link { color: cyan; text-decoration: none; font-weight: bold; font-size: 0.8rem; border-bottom: 1px solid cyan; padding-bottom: 2px; }
         .input-field { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(0,255,255,0.2); padding: 12px; border-radius: 8px; color: white; margin-bottom: 15px; outline: none; }
-        .input-field:focus { border-color: cyan; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
         .contact-btn { width: 100%; padding: 15px; background: cyan; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .contact-btn:hover { background: #00cccc; transform: scale(1.02); }
+        .joystick { 
+          width: 120px; height: 120px; border-radius: 50%; border: 2px solid cyan; 
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          position: relative; transition: 0.3s; user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .joystick.active { animation: pulse 1s infinite; background: rgba(0,255,255,0.2); transform: scale(0.95); }
 
-        /* RESPONSIVE FIXES */
         @media (max-width: 768px) {
           h1 { font-size: 2rem !important; }
-          h2 { font-size: 1.2rem !important; }
-          .timeline-container { margin: 20px auto; padding-left: 20px; }
-          .timeline-dot { left: -31px; }
-          .grid-container { grid-template-columns: 1fr !important; }
-          .project-card { padding: 20px; }
-          
-          /* Prevent 3D model from stealing scroll focus on mobile */
+          h2 { font-size: 1.1rem !important; padding: 0 10px; }
           canvas { pointer-events: none !important; }
-          
-          /* Make content more readable over 3D backgrounds on small screens */
-          .skill-box, .project-card, .timeline-item {
-            background: rgba(0,0,0,0.8) !important;
-            backdrop-filter: blur(5px);
-          }
+          .grid-container { grid-template-columns: 1fr !important; }
         }
       `}} />
 
@@ -211,19 +205,37 @@ export default function App() {
             {currentScene === 'projects' && <ProjectSceneModel />}
             {currentScene === 'contact' && <ContactModel />}
           </Suspense>
-          <OrbitControls 
-            enableZoom={currentScene === 'contact'} 
-            enableRotate={currentScene !== 'travel' && window.innerWidth > 768} 
-            enablePan={false}
-          />
+          <OrbitControls enableZoom={currentScene === 'contact'} enableRotate={currentScene !== 'travel' && window.innerWidth > 768} enablePan={false} />
         </Canvas>
       </div>
 
-      {/* --- SCENE 1: TRAVEL --- */}
+      {/* --- SCENE 1: TRAVEL (Updated with Joystick) --- */}
       {currentScene === 'travel' && (
         <div style={{ position: 'relative', zIndex: 10, height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <h2 style={{ letterSpacing: '2px', textAlign: 'center', maxWidth: '800px' }}>Welcome to my portfolio — a snapshot of my learning, projects, and passion for technology</h2>
-          <button onMouseDown={startWarp} onMouseUp={() => {clearTimeout(timerRef.current); setSpeed(1)}} style={{ padding: '15px 40px', background: 'transparent', color: 'cyan', border: '1px solid cyan', cursor: 'pointer', fontWeight: 'bold', marginTop: '30px' }}>INITIALIZE JUMP</button>
+          <h2 style={{ letterSpacing: '1px', textAlign: 'center', maxWidth: '800px', marginBottom: '50px', lineHeight: '1.6' }}>
+            Welcome to my portfolio — a snapshot of my learning, projects, and passion for technology
+          </h2>
+          
+          <div 
+            className={`joystick ${isHolding ? 'active' : ''}`}
+            onMouseDown={startWarp} 
+            onMouseUp={stopWarp} 
+            onMouseLeave={stopWarp}
+            onTouchStart={startWarp} 
+            onTouchEnd={stopWarp}
+          >
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.7rem', color: 'cyan', fontWeight: 'bold' }}>
+                {isHolding ? 'WARP DRIVE' : 'HOLD TO'}
+              </div>
+              <div style={{ fontSize: '1.1rem', color: 'white', fontWeight: '900' }}>
+                {isHolding ? 'ACTIVE' : 'JUMP'}
+              </div>
+            </div>
+          </div>
+          <p style={{ marginTop: '20px', opacity: 0.5, fontSize: '0.8rem', letterSpacing: '2px' }}>
+            {window.innerWidth < 768 ? "PRESS & HOLD CIRCLE" : "CLICK & HOLD CIRCLE"}
+          </p>
         </div>
       )}
 
@@ -315,8 +327,8 @@ export default function App() {
               <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <h2 style={{ color: 'cyan', marginBottom: '20px' }}>Let's Connect</h2>
                 <div className="stat-card" style={{ marginBottom: '15px', textAlign: 'left' }}><h4 style={{ color: 'cyan', margin: '0' }}>Email</h4><p style={{wordBreak: 'break-all'}}>sailalith26@gmail.com</p></div>
-                <div className="stat-card" style={{ marginBottom: '15px', textAlign: 'left' }}><h4 style={{ color: 'cyan', margin: '0' }}>LinkedIn</h4><a href="https://linkedin.com/in/sai-lalith-854784259" target="_blank" style={{ color: 'white', textDecoration: 'none' }}>sai-lalith-854784259</a></div>
-                <div className="stat-card" style={{ textAlign: 'left' }}><h4 style={{ color: 'cyan', margin: '0' }}>GitHub</h4><a href="https://github.com/sai200556" target="_blank" style={{ color: 'white', textDecoration: 'none' }}>github.com/sai200556</a></div>
+                <div className="stat-card" style={{ marginBottom: '15px', textAlign: 'left' }}><h4 style={{ color: 'cyan', margin: '0' }}>LinkedIn</h4><a href="https://linkedin.com/in/sai-lalith-854784259" target="_blank" rel="noreferrer" style={{ color: 'white', textDecoration: 'none' }}>sai-lalith-854784259</a></div>
+                <div className="stat-card" style={{ textAlign: 'left' }}><h4 style={{ color: 'cyan', margin: '0' }}>GitHub</h4><a href="https://github.com/sai200556" target="_blank" rel="noreferrer" style={{ color: 'white', textDecoration: 'none' }}>github.com/sai200556</a></div>
               </div>
             </div>
             <button onClick={() => handleJump('travel')} style={{ marginTop: '80px', background: 'transparent', color: 'white', border: '1px solid white', padding: '10px 40px', borderRadius: '5px', cursor: 'pointer', display: 'block', margin: '80px auto 0' }}>RESTART JOURNEY</button>
